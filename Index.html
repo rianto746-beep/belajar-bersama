@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    :root { --navy:#123b63; --blue:#1d6fa5; --bg:#f2f6fa; --ink:#172b3a; --muted:#627487; --line:#dce5ed; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Arial, sans-serif; color:var(--ink); background:var(--bg); }
+    header { background:linear-gradient(120deg,#123b63,#1d6fa5); color:white; padding:22px 16px; text-align:center; }
+    header h1 { margin:0 0 7px; font-size:24px; }
+    header p { margin:0; opacity:.9; font-size:14px; }
+    main { max-width:900px; margin:20px auto; padding:0 14px 28px; }
+    .tabs { display:flex; gap:8px; margin-bottom:14px; }
+    button, .tab { border:0; border-radius:10px; padding:12px 15px; cursor:pointer; font-weight:700; font-size:14px; }
+    .tab { flex:1; background:#dce8f2; color:var(--navy); }
+    .tab.active { background:var(--navy); color:white; }
+    .panel { background:white; border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:0 5px 18px #173b5510; }
+    h2 { margin:0 0 14px; font-size:19px; }
+    label { display:block; font-size:13px; font-weight:700; margin:12px 0 6px; }
+    input, select { width:100%; border:1px solid #c8d5e0; border-radius:9px; padding:12px; font-size:16px; background:white; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .camera { margin-top:14px; background:#0b1721; border-radius:12px; overflow:hidden; position:relative; }
+    video { width:100%; max-height:380px; display:block; object-fit:cover; }
+    canvas { display:none; width:100%; }
+    .camera-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+    .primary { background:var(--blue); color:white; }
+    .dark { background:var(--navy); color:white; }
+    .light { background:#e8eef3; color:var(--ink); }
+    button:disabled { opacity:.5; cursor:not-allowed; }
+    .wide { width:100%; margin-top:14px; }
+    .hint { color:var(--muted); font-size:13px; line-height:1.5; }
+    .notice { padding:12px; border-radius:9px; margin:12px 0; font-size:14px; line-height:1.5; display:none; }
+    .notice.ok { display:block; background:#e5f6eb; color:#17663a; }
+    .notice.err { display:block; background:#fff0ed; color:#9a2d1d; }
+    .hidden { display:none !important; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:12px 0; }
+    .stat { padding:14px; background:#f3f7fb; border:1px solid var(--line); border-radius:12px; }
+    .stat b { display:block; font-size:24px; margin-top:5px; color:var(--navy); }
+    .stat span { color:var(--muted); font-size:12px; }
+    .chart { display:flex; align-items:end; gap:10px; height:190px; padding:14px 8px 0; border-bottom:1px solid var(--line); overflow-x:auto; }
+    .bar-group { min-width:42px; flex:1; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:end; gap:5px; }
+    .bars { height:145px; display:flex; align-items:end; gap:4px; }
+    .bar { width:13px; min-height:2px; border-radius:4px 4px 0 0; }
+    .bar.in { background:#2385c5; } .bar.out { background:#37a66a; }
+    .bar-label { font-size:10px; color:var(--muted); white-space:nowrap; }
+    .legend { font-size:12px; color:var(--muted); margin:8px 0 14px; }
+    .table-wrap { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; font-size:12px; margin-top:12px; }
+    th,td { border-bottom:1px solid var(--line); padding:9px 7px; text-align:left; white-space:nowrap; }
+    th { background:#f3f7fb; }
+    a { color:var(--blue); }
+    footer { text-align:center; color:var(--muted); font-size:12px; padding:8px 0 20px; }
+    @media(max-width:600px) { header h1{font-size:20px;} .grid{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} .panel{padding:14px;} }
+  </style>
+</head>
+<body>
+<header>
+  <h1>ABSENSI SELFIE SEKOLAH</h1>
+  <p>Absensi murid dan guru • Foto langsung dari kamera • Rekap otomatis</p>
+</header>
+<main>
+  <div class="tabs">
+    <button class="tab active" id="tabAbsen" onclick="showTab('absen')">Absen</button>
+    <button class="tab" id="tabAdmin" onclick="showTab('admin')">Dashboard Admin</button>
+  </div>
+
+  <section id="absenPanel" class="panel">
+    <h2>Formulir Kehadiran</h2>
+    <p class="hint">Gunakan ID dan PIN yang diberikan sekolah. Pastikan foto diambil langsung melalui kamera, bukan diunggah dari galeri.</p>
+    <div class="grid">
+      <div><label for="userId">NIS/NIP/ID Pengguna</label><input id="userId" autocomplete="username" placeholder="Masukkan ID"></div>
+      <div><label for="userPin">PIN</label><input id="userPin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Masukkan PIN"></div>
+    </div>
+    <label for="kind">Jenis absensi</label>
+    <select id="kind"><option value="Masuk">Absen Masuk</option><option value="Pulang">Absen Pulang</option></select>
+
+    <div class="camera">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+    </div>
+    <div class="camera-actions">
+      <button class="primary" id="startCam" onclick="startCamera()">Aktifkan Kamera</button>
+      <button class="dark" id="takePhoto" onclick="takePhoto()" disabled>Ambil Selfie</button>
+      <button class="light" id="retake" onclick="retakePhoto()" disabled>Ulangi Foto</button>
+    </div>
+    <p class="hint" id="cameraHint">Kamera belum diaktifkan. Izinkan akses kamera saat browser memintanya.</p>
+    <div id="message" class="notice"></div>
+    <button class="primary wide" id="submitBtn" onclick="submitAbsensi()" disabled>Kirim Absensi</button>
+  </section>
+
+  <section id="adminPanel" class="panel hidden">
+    <h2>Dashboard Rekap Absensi</h2>
+    <p class="hint">Masukkan PIN admin. Jangan membagikan PIN ini kepada murid atau pengguna umum.</p>
+    <label for="adminPin">PIN Admin</label><input id="adminPin" type="password" placeholder="PIN admin">
+    <div class="grid">
+      <div><label for="dateFrom">Tanggal mulai</label><input id="dateFrom" type="date"></div>
+      <div><label for="dateTo">Tanggal akhir</label><input id="dateTo" type="date"></div>
+    </div>
+    <button class="dark wide" onclick="loadDashboard()">Tampilkan Rekap</button>
+    <div id="adminMessage" class="notice"></div>
+    <div id="dashboardContent" class="hidden">
+      <div class="stats">
+        <div class="stat"><span>Total catatan</span><b id="sTotal">0</b></div>
+        <div class="stat"><span>Absen masuk</span><b id="sMasuk">0</b></div>
+        <div class="stat"><span>Absen pulang</span><b id="sPulang">0</b></div>
+        <div class="stat"><span>Catatan murid/guru</span><b id="sPeople">0/0</b></div>
+      </div>
+      <h2>Grafik Kehadiran per Hari</h2>
+      <div class="chart" id="chart"></div>
+      <div class="legend">■ Biru: Masuk &nbsp; ■ Hijau: Pulang</div>
+      <button class="light" onclick="downloadCsv()">Unduh CSV</button>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Tanggal</th><th>Waktu</th><th>ID</th><th>Nama</th><th>Peran</th><th>Kelas/Jabatan</th><th>Jenis</th><th>Foto</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <p class="hint">Dashboard menampilkan maksimal 500 catatan terbaru dalam rentang tanggal yang dipilih. Tautan foto hanya dapat dibuka oleh akun yang memiliki izin Drive.</p>
+    </div>
+  </section>
+</main>
+<footer>Gunakan data seperlunya dan lindungi privasi murid serta guru.</footer>
+
+<script>
+  let cameraStream = null;
+  let photoData = '';
+  let dashboardRows = [];
+
+  function showTab(which) {
+    const isAdmin = which === 'admin';
+    document.getElementById('absenPanel').classList.toggle('hidden', isAdmin);
+    document.getElementById('adminPanel').classList.toggle('hidden', !isAdmin);
+    document.getElementById('tabAbsen').classList.toggle('active', !isAdmin);
+    document.getElementById('tabAdmin').classList.toggle('active', isAdmin);
+    if (isAdmin) stopCamera();
+  }
+  function message(id, text, type) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'notice ' + type;
+  }
+  function clearMessage(id) {
+    const el = document.getElementById(id);
+    el.textContent = '';
+    el.className = 'notice';
+  }
+
+  async function startCamera() {
+    clearMessage('message');
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Browser tidak mendukung kamera. Buka aplikasi melalui URL HTTPS dan gunakan browser terbaru.');
+      }
+      stopCamera();
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+      const video = document.getElementById('video');
+      video.srcObject = cameraStream;
+      await video.play();
+      document.getElementById('takePhoto').disabled = false;
+      document.getElementById('cameraHint').textContent = 'Kamera aktif. Posisikan wajah di tengah lalu tekan Ambil Selfie.';
+    } catch (e) {
+      message('message', 'Kamera tidak dapat diaktifkan: ' + e.message, 'err');
+    }
+  }
+  function takePhoto() {
+    const video = document.getElementById('video');
+    if (!cameraStream || !video.videoWidth) {
+      message('message', 'Aktifkan kamera dan tunggu gambar muncul terlebih dahulu.', 'err'); return;
+    }
+    const canvas = document.getElementById('canvas');
+    const maxWidth = 900;
+    const scale = Math.min(1, maxWidth / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    photoData = canvas.toDataURL('image/jpeg', 0.78);
+    canvas.style.display = 'block';
+    video.style.display = 'none';
+    document.getElementById('takePhoto').disabled = true;
+    document.getElementById('retake').disabled = false;
+    document.getElementById('submitBtn').disabled = false;
+    document.getElementById('cameraHint').textContent = 'Foto siap dikirim. Jika kurang jelas, tekan Ulangi Foto.';
+    stopCamera();
+  }
+  function retakePhoto() {
+    photoData = '';
+    document.getElementById('canvas').style.display = 'none';
+    document.getElementById('video').style.display = 'block';
+    document.getElementById('retake').disabled = true;
+    document.getElementById('submitBtn').disabled = true;
+    startCamera();
+  }
+  function stopCamera() {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      cameraStream = null;
+    }
+  }
+  function submitAbsensi() {
+    const id = document.getElementById('userId').value.trim();
+    const pin = document.getElementById('userPin').value.trim();
+    const kind = document.getElementById('kind').value;
+    if (!id || !pin) { message('message', 'ID dan PIN harus diisi.', 'err'); return; }
+    if (!photoData) { message('message', 'Ambil foto selfie terlebih dahulu.', 'err'); return; }
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true; btn.textContent = 'Menyimpan...';
+    clearMessage('message');
+    google.script.run
+      .withSuccessHandler(res => {
+        message('message', res.message + ' Nama: ' + res.name + '. Waktu: ' + res.date + ' ' + res.time, 'ok');
+        btn.textContent = 'Absensi Terkirim';
+        photoData = '';
+        document.getElementById('userPin').value = '';
+        document.getElementById('canvas').style.display = 'none';
+        document.getElementById('video').style.display = 'block';
+        document.getElementById('cameraHint').textContent = 'Absensi tersimpan. Untuk absensi berikutnya, aktifkan kamera kembali.';
+        document.getElementById('takePhoto').disabled = true;
+        document.getElementById('retake').disabled = true;
+      })
+      .withFailureHandler(err => {
+        message('message', err && err.message ? err.message : 'Gagal menyimpan absensi.', 'err');
+        btn.disabled = false; btn.textContent = 'Kirim Absensi';
+      })
+      .submitAttendance({ id, pin, kind, photoData });
+  }
+  function loadDashboard() {
+    const pin = document.getElementById('adminPin').value;
+    const from = document.getElementById('dateFrom').value;
+    const to = document.getElementById('dateTo').value;
+    const btn = document.querySelector('#adminPanel button.dark');
+    btn.disabled = true; btn.textContent = 'Memuat...';
+    google.script.run
+      .withSuccessHandler(data => {
+        btn.disabled = false; btn.textContent = 'Tampilkan Rekap';
+        clearMessage('adminMessage');
+        dashboardRows = data.rows || [];
+        document.getElementById('dashboardContent').classList.remove('hidden');
+        document.getElementById('sTotal').textContent = data.summary.total;
+        document.getElementById('sMasuk').textContent = data.summary.masuk;
+        document.getElementById('sPulang').textContent = data.summary.pulang;
+        document.getElementById('sPeople').textContent = data.summary.murid + '/' + data.summary.guru;
+        renderChart(data.byDate || []);
+        renderRows(dashboardRows);
+      })
+      .withFailureHandler(err => {
+        btn.disabled = false; btn.textContent = 'Tampilkan Rekap';
+        document.getElementById('dashboardContent').classList.add('hidden');
+        message('adminMessage', err && err.message ? err.message : 'Gagal memuat dashboard.', 'err');
+      })
+      .getDashboard(pin, from, to);
+  }
+  function renderChart(items) {
+    const el = document.getElementById('chart');
+    el.innerHTML = '';
+    if (!items.length) { el.textContent = 'Belum ada data pada rentang tanggal ini.'; return; }
+    const max = Math.max(1, ...items.map(x => Math.max(x.masuk, x.pulang)));
+    items.forEach(item => {
+      const group = document.createElement('div'); group.className = 'bar-group';
+      const bars = document.createElement('div'); bars.className = 'bars';
+      const a = document.createElement('div'); a.className = 'bar in';
+      a.style.height = Math.max(2, item.masuk / max * 130) + 'px'; a.title = 'Masuk: ' + item.masuk;
+      const b = document.createElement('div'); b.className = 'bar out';
+      b.style.height = Math.max(2, item.pulang / max * 130) + 'px'; b.title = 'Pulang: ' + item.pulang;
+      bars.append(a,b);
+      const label = document.createElement('div'); label.className = 'bar-label'; label.textContent = item.date.slice(5);
+      group.append(bars,label); el.append(group);
+    });
+  }
+  function renderRows(rows) {
+    const tbody = document.getElementById('rows'); tbody.innerHTML = '';
+    rows.forEach(r => {
+      const tr = document.createElement('tr');
+      [r.date,r.time,r.id,r.name,r.role,r.group,r.kind].forEach(value => {
+        const td = document.createElement('td'); td.textContent = value || ''; tr.append(td);
+      });
+      const td = document.createElement('td');
+      if (r.photoUrl) {
+        const a = document.createElement('a'); a.href = r.photoUrl; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Buka foto'; td.append(a);
+      } else td.textContent = '-';
+      tr.append(td); tbody.append(tr);
+    });
+  }
+  function downloadCsv() {
+    const headers = ['Tanggal','Waktu','ID','Nama','Peran','Kelas/Jabatan','Jenis','Status','Link Foto'];
+    const values = dashboardRows.map(r => [r.date,r.time,r.id,r.name,r.role,r.group,r.kind,r.status,r.photoUrl]);
+    const csv = [headers, ...values].map(row => row.map(v => '"' + String(v == null ? '' : v).replace(/"/g,'""') + '"').join(',')).join('\r\n');
+    const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'rekap-absensi.csv'; a.click();
+    URL.revokeObjectURL(url);
+  }
+  // Isi tanggal awal/akhir dengan hari ini menurut waktu perangkat.
+  (function initDates() {
+    const d = new Date();
+    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0,10);
+    document.getElementById('dateFrom').value = local;
+    document.getElementById('dateTo').value = local;
+  })();
+  window.addEventListener('pagehide', stopCamera);
+</script>
+</body>
+</html>
